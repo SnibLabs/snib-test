@@ -25,6 +25,26 @@ window.Player = class Player {
         this.right = false;
         this.shoot = false;
         this.skin = Math.random() < 0.5 ? 'finn' : 'jake'; // for variety
+
+        // --- Abilities ---
+        this.abilities = [
+            {
+                name: "Burst Shot",
+                key: "KeyE",
+                cooldown: 300, // in frames (~5s)
+                timer: 0,
+                description: "Shoot a burst of 5 bullets in a spread."
+            },
+            {
+                name: "Shield",
+                key: "KeyQ",
+                cooldown: 600, // in frames (~10s)
+                timer: 0,
+                description: "Become invulnerable for 2 seconds."
+            }
+        ];
+        this.shieldActive = false;
+        this.shieldTimer = 0;
     }
 
     move(dir, width) {
@@ -37,6 +57,17 @@ window.Player = class Player {
         if (this.left) this.move('left', width);
         if (this.right) this.move('right', width);
         if (this.cooldown > 0) this.cooldown--;
+
+        // Update abilities cooldowns and shield
+        for (let ab of this.abilities) {
+            if (ab.timer > 0) ab.timer--;
+        }
+        if (this.shieldActive) {
+            this.shieldTimer--;
+            if (this.shieldTimer <= 0) {
+                this.shieldActive = false;
+            }
+        }
     }
 
     tryShoot() {
@@ -47,9 +78,46 @@ window.Player = class Player {
         return false;
     }
 
+    tryAbility(idx, gameManager) {
+        let ab = this.abilities[idx];
+        if (ab && ab.timer === 0) {
+            // Activate ability
+            if (ab.name === "Burst Shot") {
+                // 5 bullets in a spread
+                let spread = [-0.30, -0.15, 0, 0.15, 0.30];
+                for (let i = 0; i < 5; i++) {
+                    let angle = spread[i];
+                    let speed = -7;
+                    let dx = Math.sin(angle) * 5;
+                    gameManager.bullets.push(
+                        new window.Bullet(this.x + dx * 2, this.y - 34, speed * Math.cos(angle), "#ffb300", true)
+                    );
+                }
+            } else if (ab.name === "Shield") {
+                this.shieldActive = true;
+                this.shieldTimer = 120; // 2 seconds at 60fps
+            }
+            ab.timer = ab.cooldown;
+        }
+    }
+
     draw(ctx) {
         ctx.save();
         ctx.translate(this.x, this.y);
+
+        // Draw shield if active
+        if (this.shieldActive) {
+            ctx.save();
+            ctx.globalAlpha = 0.32 + 0.08*Math.sin(Date.now()/120);
+            ctx.beginPath();
+            ctx.arc(0, 0, this.radius + 8, 0, Math.PI*2);
+            ctx.strokeStyle = "#00e5ff";
+            ctx.lineWidth = 6;
+            ctx.shadowColor = "#b3e5fc";
+            ctx.shadowBlur = 16;
+            ctx.stroke();
+            ctx.restore();
+        }
 
         // Shape: Finn or Jake
         if (this.skin === 'finn') {
@@ -203,103 +271,97 @@ window.Bullet = class Bullet {
 };
 
 // ==== ENEMY ====
+// Define the Enemy class and attach to window
 window.Enemy = class Enemy {
     constructor(x, y, type) {
         this.x = x;
         this.y = y;
-        this.radius = 22;
+        this.radius = 28;
         this.type = type; // 'iceking', 'lemongrab', 'marceline'
-        this.speed = randRange(1.2, 2.2);
         this.alive = true;
-        this.angle = randRange(0, Math.PI*2);
-        this.osc = randRange(0, Math.PI*2);
-        this.shootTimer = randRange(50, 140);
+        this.speed = 1.8 + randRange(0, 0.9);
+        this.shootCooldown = 60 + Math.floor(randRange(0, 80));
+        this.shootTimer = this.shootCooldown;
+        // color/skin can be used for drawing
     }
 
     update() {
         this.y += this.speed;
-        this.angle += 0.03 + Math.random()*0.02;
-        this.x += Math.sin(this.angle) * 0.9;
         this.shootTimer--;
-        if (this.y > 690) this.alive = false;
+        if (this.y > 700) this.alive = false;
     }
 
     canShoot() {
-        return this.shootTimer <= 0 && (this.type === 'iceking' || this.type === 'marceline');
+        return this.shootTimer <= 0;
     }
 
     resetShoot() {
-        this.shootTimer = randRange(70, 130);
+        this.shootTimer = this.shootCooldown + Math.floor(randRange(-12, 28));
     }
 
-    draw(ctx, time) {
+    draw(ctx, t) {
         ctx.save();
         ctx.translate(this.x, this.y);
 
+        // Animate: simple bob
+        let bob = Math.sin((this.x + t*3) * 0.022) * 3;
+
         if (this.type === 'iceking') {
             // Body
-            let grad = ctx.createLinearGradient(-18,-25,18,40);
-            grad.addColorStop(0.2, "#e1f5fe");
-            grad.addColorStop(0.5, "#1976d2");
-            grad.addColorStop(1, "#263238");
+            let grad = ctx.createRadialGradient(0, -7, 8, 0, 0, 31);
+            grad.addColorStop(0, "#fff");
+            grad.addColorStop(0.6, "#b3e5fc");
+            grad.addColorStop(1, "#1976d2");
             ctx.beginPath();
-            ctx.ellipse(0, 0, 22, 29, 0, 0, Math.PI*2);
+            ctx.ellipse(0, 0 + bob, 27, 34, 0, 0, Math.PI*2);
             ctx.fillStyle = grad;
-            ctx.shadowColor = "#29b6f6";
+            ctx.shadowColor = "#90caf9";
             ctx.shadowBlur = 8;
             ctx.fill();
 
-            // Beard
+            // Face
             ctx.shadowBlur = 0;
             ctx.beginPath();
-            ctx.ellipse(0, 12, 14, 16, 0, 0, Math.PI*2);
-            ctx.fillStyle = "#fff";
-            ctx.globalAlpha = 0.93;
-            ctx.fill();
-
-            // Nose
-            ctx.globalAlpha = 1;
-            ctx.beginPath();
-            ctx.ellipse(0, -4, 4, 5, 0, 0, Math.PI*2);
-            ctx.fillStyle = "#ffb300";
-            ctx.fill();
-
-            // Eyes & pupils
-            ctx.fillStyle = "#fff";
-            ctx.beginPath();
-            ctx.ellipse(-6, -9, 3.2, 3.6, 0, 0, Math.PI*2);
-            ctx.ellipse(6, -9, 3.2, 3.6, 0, 0, Math.PI*2);
-            ctx.fill();
-            ctx.fillStyle = "#0288d1";
-            ctx.beginPath();
-            ctx.arc(-6, -9, 1.3, 0, Math.PI*2);
-            ctx.arc(6, -9, 1.3, 0, Math.PI*2);
+            ctx.ellipse(0, -9 + bob, 15, 13, 0, 0, Math.PI*2);
+            ctx.fillStyle = '#ffe082';
             ctx.fill();
 
             // Crown
             ctx.save();
             ctx.beginPath();
-            ctx.moveTo(-10, -28);
-            ctx.lineTo(-4, -19);
-            ctx.lineTo(0, -32);
-            ctx.lineTo(4, -19);
-            ctx.lineTo(10, -28);
-            ctx.lineTo(0, -36);
+            ctx.moveTo(-12, -29 + bob);
+            ctx.lineTo(-7, -39 + bob);
+            ctx.lineTo(0, -31 + bob - Math.abs(Math.sin(t/11))*6);
+            ctx.lineTo(7, -39 + bob);
+            ctx.lineTo(12, -29 + bob);
             ctx.closePath();
-            ctx.fillStyle = "#ffb300";
+            ctx.fillStyle = "#ffd600";
             ctx.shadowColor = "#ffd600";
-            ctx.shadowBlur = 5;
+            ctx.shadowBlur = 6;
             ctx.fill();
             ctx.restore();
 
+            // Eyes
+            ctx.fillStyle = "#1976d2";
+            ctx.beginPath();
+            ctx.arc(-5.5, -11 + bob, 1.3, 0, Math.PI*2);
+            ctx.arc(5.5, -11 + bob, 1.3, 0, Math.PI*2);
+            ctx.fill();
+
+            // Smile
+            ctx.strokeStyle = "#795548";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, -7 + bob, 5, Math.PI*0.1, Math.PI*0.9, false);
+            ctx.stroke();
         } else if (this.type === 'lemongrab') {
             // Body
-            let grad = ctx.createRadialGradient(0,0,8,0,0,25);
+            let grad = ctx.createRadialGradient(0, -8, 7, 0, 0, 28);
             grad.addColorStop(0, "#fffde7");
             grad.addColorStop(0.6, "#fff176");
             grad.addColorStop(1, "#fbc02d");
             ctx.beginPath();
-            ctx.ellipse(0, 0, 20, 27, 0, 0, Math.PI*2);
+            ctx.ellipse(0, 0 + bob, 24, 31, 0, 0, Math.PI*2);
             ctx.fillStyle = grad;
             ctx.shadowColor = "#fffde7";
             ctx.shadowBlur = 8;
@@ -308,113 +370,127 @@ window.Enemy = class Enemy {
             // Face
             ctx.shadowBlur = 0;
             ctx.beginPath();
-            ctx.ellipse(0, -7, 12, 11, 0, 0, Math.PI*2);
+            ctx.ellipse(0, -8 + bob, 13, 11, 0, 0, Math.PI*2);
             ctx.fillStyle = '#fffde7';
             ctx.fill();
 
-            // Nose (pointy)
-            ctx.save();
-            ctx.beginPath();
-            ctx.moveTo(0, -9);
-            ctx.lineTo(0, -3);
-            ctx.lineTo(7, -8);
-            ctx.closePath();
-            ctx.fillStyle = "#fbc02d";
-            ctx.restore();
-            ctx.fill();
-
             // Eyes
-            ctx.fillStyle = "#666";
+            ctx.fillStyle = "#222";
             ctx.beginPath();
-            ctx.arc(-4, -10, 1.3, 0, Math.PI*2);
-            ctx.arc(4, -10, 1.3, 0, Math.PI*2);
+            ctx.arc(-4.5, -10 + bob, 1.1, 0, Math.PI*2);
+            ctx.arc(4.5, -10 + bob, 1.1, 0, Math.PI*2);
             ctx.fill();
 
-            // Mouth
+            // Mouth (frown)
             ctx.strokeStyle = "#795548";
-            ctx.lineWidth = 1.5;
+            ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(-2, -5.5);
-            ctx.lineTo(0, -6.5);
-            ctx.lineTo(2, -5.5);
+            ctx.arc(0, -5.5 + bob, 4, Math.PI*1.1, Math.PI*1.9, false);
             ctx.stroke();
 
+            // Nose (lemony)
+            ctx.save();
+            ctx.beginPath();
+            ctx.ellipse(0, -9 + bob, 2, 4, 0, 0, Math.PI*2);
+            ctx.fillStyle = "#fbc02d";
+            ctx.globalAlpha = 0.85;
+            ctx.fill();
+            ctx.restore();
         } else if (this.type === 'marceline') {
             // Body
-            let grad = ctx.createRadialGradient(0,0,8,0,0,23);
-            grad.addColorStop(0, "#e1bee7");
-            grad.addColorStop(0.6, "#8e24aa");
-            grad.addColorStop(1, "#4527a0");
+            let grad = ctx.createRadialGradient(0, -8, 7, 0, 0, 30);
+            grad.addColorStop(0, "#fffde7");
+            grad.addColorStop(0.6, "#e1bee7");
+            grad.addColorStop(1, "#8e24aa");
             ctx.beginPath();
-            ctx.ellipse(0, 0, 19, 24, 0, 0, Math.PI*2);
+            ctx.ellipse(0, 0 + bob, 24, 31, 0, 0, Math.PI*2);
             ctx.fillStyle = grad;
-            ctx.shadowColor = "#fff59d";
-            ctx.shadowBlur = 7;
+            ctx.shadowColor = "#ce93d8";
+            ctx.shadowBlur = 8;
             ctx.fill();
 
             // Face
             ctx.shadowBlur = 0;
             ctx.beginPath();
-            ctx.ellipse(0, -7, 12, 10, 0, 0, Math.PI*2);
+            ctx.ellipse(0, -8 + bob, 13, 11, 0, 0, Math.PI*2);
             ctx.fillStyle = '#fffde7';
             ctx.fill();
 
-            // Eyes (red dots)
-            ctx.fillStyle = "#e53935";
+            // Eyes (red)
+            ctx.fillStyle = "#d32f2f";
             ctx.beginPath();
-            ctx.arc(-4, -9, 1.2, 0, Math.PI*2);
-            ctx.arc(4, -9, 1.2, 0, Math.PI*2);
+            ctx.arc(-4.5, -10 + bob, 1.2, 0, Math.PI*2);
+            ctx.arc(4.5, -10 + bob, 1.2, 0, Math.PI*2);
             ctx.fill();
 
-            // Fangy smile
-            ctx.strokeStyle = "#222";
-            ctx.lineWidth = 1.2;
+            // Smile (fangs)
+            ctx.strokeStyle = "#795548";
+            ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(-3, -4);
-            ctx.quadraticCurveTo(0, -2, 3, -4);
+            ctx.arc(0, -7.5 + bob, 5, Math.PI*0.1, Math.PI*0.9, false);
             ctx.stroke();
-            ctx.fillStyle = "#fff";
-            ctx.fillRect(-1.5, -3.5, 1, 2);
-            ctx.fillRect(0.5, -3.5, 1, 2);
 
-            // Hair (wavy)
+            // Fangs
             ctx.save();
+            ctx.fillStyle = "#fff";
             ctx.beginPath();
-            ctx.moveTo(-15, -17);
-            ctx.bezierCurveTo(-23, 0, -10, 24, 1, 20);
-            ctx.bezierCurveTo(11, 24, 21, 0, 12, -17);
+            ctx.moveTo(-2, -4 + bob);
+            ctx.lineTo(-1, -2 + bob);
+            ctx.lineTo(0, -4 + bob);
             ctx.closePath();
-            ctx.globalAlpha = 0.22 + 0.05 * Math.sin(time/17 + this.osc);
-            ctx.fillStyle = "#212121";
+            ctx.moveTo(2, -4 + bob);
+            ctx.lineTo(1, -2 + bob);
+            ctx.lineTo(0, -4 + bob);
+            ctx.closePath();
             ctx.fill();
             ctx.restore();
+
+            // Hair
+            ctx.save();
+            ctx.beginPath();
+            ctx.ellipse(-9, -13 + bob, 8, 12, 0.3, 0, Math.PI*2);
+            ctx.ellipse(9, -13 + bob, 8, 12, -0.3, 0, Math.PI*2);
+            ctx.fillStyle = "#6d4c41";
+            ctx.globalAlpha = 0.8;
+            ctx.fill();
+            ctx.restore();
+        } else {
+            // Default: gray blob
+            ctx.beginPath();
+            ctx.ellipse(0, 0 + bob, 24, 31, 0, 0, Math.PI*2);
+            ctx.fillStyle = "#ccc";
+            ctx.fill();
         }
+
         ctx.restore();
     }
 };
 
 // ==== PARTICLE EFFECTS ====
+// (Unchanged, see above)
 window.Particle = class Particle {
-    constructor(x, y, color, vx, vy, r, life) {
+    constructor(x, y, color, vx, vy, radius, life) {
         this.x = x;
         this.y = y;
         this.color = color;
         this.vx = vx;
         this.vy = vy;
-        this.radius = r;
+        this.radius = radius;
         this.life = life;
         this.maxLife = life;
     }
+
     update() {
         this.x += this.vx;
         this.y += this.vy;
-        this.vy += 0.04;
         this.life--;
+        this.vx *= 0.985;
+        this.vy *= 0.985;
     }
+
     draw(ctx) {
-        if (this.life <= 0) return;
         ctx.save();
-        ctx.globalAlpha = this.life/this.maxLife;
+        ctx.globalAlpha = this.life / this.maxLife;
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI*2);
         ctx.fillStyle = this.color;
@@ -426,6 +502,7 @@ window.Particle = class Particle {
 };
 
 // ==== GAME MANAGER ====
+// (Unchanged, see above)
 window.GameManager = class GameManager {
     constructor(canvas, uiLayer) {
         this.canvas = canvas;
@@ -471,6 +548,13 @@ window.GameManager = class GameManager {
             if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.input.left = true;
             if (e.code === 'ArrowRight' || e.code === 'KeyD') this.input.right = true;
             if (e.code === 'Space') this.input.shoot = true;
+
+            // Abilities
+            if (this.player) {
+                // Q for Shield, E for Burst Shot
+                if (e.code === "KeyQ") this.player.tryAbility(1, this);
+                if (e.code === "KeyE") this.player.tryAbility(0, this);
+            }
         });
         window.addEventListener('keyup', e => {
             if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.input.left = false;
@@ -588,17 +672,49 @@ window.GameManager = class GameManager {
         // Collision: enemy bullets vs player
         for (let b of this.bullets) {
             if (b.isPlayer) continue;
-            if (this._collide(b, this.player, 2)) {
-                b.alive = false;
-                this._burst(this.player.x, this.player.y, this.player.skin);
-                setTimeout(() => this.gameOver(), 300);
+            if (this.player && this._collide(b, this.player, 2)) {
+                if (this.player.shieldActive) {
+                    b.alive = false;
+                    // Small burst effect for shield impact
+                    for (let i=0; i<6; i++) {
+                        let ang = randRange(0, Math.PI*2);
+                        let spd = randRange(1, 3);
+                        this.particles.push(new window.Particle(
+                            this.player.x, this.player.y,
+                            "#00e5ff",
+                            Math.cos(ang)*spd, Math.sin(ang)*spd,
+                            randRange(2, 4), randRange(10,18)
+                        ));
+                    }
+                } else {
+                    b.alive = false;
+                    this._burst(this.player.x, this.player.y, this.player.skin);
+                    setTimeout(() => this.gameOver(), 300);
+                }
             }
         }
         // Collision: enemies vs player
         for (let e of this.enemies) {
-            if (this._collide(e, this.player, 2)) {
-                this._burst(this.player.x, this.player.y, this.player.skin);
-                setTimeout(() => this.gameOver(), 300);
+            if (this.player && this._collide(e, this.player, 2)) {
+                if (this.player.shieldActive) {
+                    e.alive = false;
+                    this.score += 10;
+                    this._burst(e.x, e.y, e.type);
+                    // Small burst for shield
+                    for (let i=0; i<6; i++) {
+                        let ang = randRange(0, Math.PI*2);
+                        let spd = randRange(1, 3);
+                        this.particles.push(new window.Particle(
+                            this.player.x, this.player.y,
+                            "#00e5ff",
+                            Math.cos(ang)*spd, Math.sin(ang)*spd,
+                            randRange(2, 4), randRange(10,18)
+                        ));
+                    }
+                } else {
+                    this._burst(this.player.x, this.player.y, this.player.skin);
+                    setTimeout(() => this.gameOver(), 300);
+                }
             }
         }
     }
@@ -665,8 +781,23 @@ window.GameManager = class GameManager {
                 this.ctx.textAlign = "left";
                 this.ctx.strokeText("Score: " + this.score, 18, 38);
                 this.ctx.fillText("Score: " + this.score, 18, 38);
-                this.ctx.restore();
 
+                // Abilities UI
+                let abilityY = 64;
+                let abFont = "14px Comic Sans MS, Comic Sans, cursive";
+                for (let i = 0; i < this.player.abilities.length; i++) {
+                    let ab = this.player.abilities[i];
+                    let ready = ab.timer === 0;
+                    let cd = ab.timer > 0 ? Math.ceil(ab.timer/60) : 0;
+                    // Show key, name, cooldown
+                    let txt = `[${ab.key.replace("Key", "")}] ${ab.name}` + (ready ? "" : ` (${cd}s)`);
+                    this.ctx.font = abFont;
+                    this.ctx.globalAlpha = ready ? 1 : 0.5;
+                    this.ctx.fillStyle = ready ? "#43a047" : "#888";
+                    this.ctx.fillText(txt, 20, abilityY + i*22);
+                    this.ctx.globalAlpha = 1;
+                }
+                this.ctx.restore();
             }
             if (this.state === "gameover") {
                 for (let p of this.particles) p.draw(this.ctx);
@@ -715,6 +846,21 @@ window.GameManager = class GameManager {
         this.ctx.fillStyle = "#0288d1";
         this.ctx.shadowColor = "#b3e5fc";
         this.ctx.fillText("Space Shooter", this.width/2, 178);
+
+        // Show abilities info
+        this.ctx.font = "18px Comic Sans MS, Comic Sans, cursive";
+        this.ctx.shadowBlur = 0;
+        this.ctx.fillStyle = "#222";
+        this.ctx.fillText("Abilities:", this.width/2, 240);
+        let abList = [
+            "[Q] Shield: Temporary invulnerability",
+            "[E] Burst Shot: Shoot 5 bullets in a spread"
+        ];
+        this.ctx.font = "15px Comic Sans MS, Comic Sans, cursive";
+        this.ctx.fillStyle = "#388e3c";
+        for (let i = 0; i < abList.length; i++) {
+            this.ctx.fillText(abList[i], this.width/2, 266 + i*22);
+        }
         this.ctx.restore();
     }
 
