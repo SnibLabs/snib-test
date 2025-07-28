@@ -21,11 +21,9 @@ canvas {
     background: transparent;
     outline: none;
     display: block;
-    width: 100%;
-    height: 100%;
-    max-width: 100vw;
-    max-height: 100vh;
-    /* Remove margin for fullscreen */
+    /* Remove forced 100% width/height, use JS to set aspect-ratio */
     margin: 0;
     padding: 0;
+    max-width: 100vw;
+    max-height: 100vh;
 }
