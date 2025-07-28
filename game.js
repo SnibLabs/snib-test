@@ -13,6 +13,14 @@ class SouthParkShooterGame {
         this.ctx = this.canvas.getContext('2d');
         this.container.appendChild(this.canvas);
 
+        // Preload main character image
+        this.mainCharacterImage = new window.Image();
+        this.mainCharacterImage.src = "https://dcnmwoxzefwqmvvkpqap.supabase.co/storage/v1/object/public/sprite-studio-exports/6f1edf47-be71-4c38-9203-26202e227b0a/library/Zoooombie_outline_1753667724999.png";
+        this.mainCharacterImageLoaded = false;
+        this.mainCharacterImage.onload = () => {
+            this.mainCharacterImageLoaded = true;
+        };
+
         // Game state
         this.state = 'menu'; // menu, playing, gameover
 
@@ -82,20 +90,22 @@ class SouthParkShooterGame {
     handleResize() {
         // Fill container or viewport, preserve aspect ratio (portrait)
         let container = this.container;
-        let ww = window.innerWidth;
-        let wh = window.innerHeight;
+        let ww = container.clientWidth;
+        let wh = container.clientHeight;
         let scale = Math.min(ww / this.baseWidth, wh / this.baseHeight);
 
-        // Calculate new canvas size
+        // Calculate new canvas size for logical area
         let newWidth = Math.round(this.baseWidth * scale);
         let newHeight = Math.round(this.baseHeight * scale);
 
+        // Set canvas style to fit container with aspect ratio
         this.canvas.style.width = newWidth + "px";
         this.canvas.style.height = newHeight + "px";
-        this.canvas.width = this.width = this.baseWidth;
-        this.canvas.height = this.height = this.baseHeight;
+        // Always keep the internal resolution fixed for drawing
+        this.canvas.width = this.baseWidth;
+        this.canvas.height = this.baseHeight;
 
-        // Center canvas in container
+        // Center canvas in container, remove margin/padding
         this.canvas.style.display = "block";
         this.canvas.style.margin = "auto";
         this.canvas.style.boxSizing = "border-box";
@@ -374,6 +384,8 @@ class SouthParkShooterGame {
 
     // --- South Park Character Drawings ---
 
+    // drawCartman, drawKenny, drawStan, drawKyle remain for enemies and menu/game over
+
     drawCartman(ctx, x, y) {
         ctx.save();
         ctx.translate(x, y);
@@ -589,8 +601,29 @@ class SouthParkShooterGame {
         ctx.restore();
     }
 
+    // --- Main Character Draw Function ---
     drawPlayer(ctx, x, y) {
-        this.drawCartman(ctx, x, y);
+        // Use the loaded image for the main character
+        if (this.mainCharacterImageLoaded) {
+            // Draw centered on (x, y), scaled to player.w x player.h
+            const iw = this.mainCharacterImage.width;
+            const ih = this.mainCharacterImage.height;
+            // Maintain aspect ratio, fit in player.w x player.h
+            const scale = Math.min(this.player.w / iw, this.player.h / ih);
+            const drawW = iw * scale;
+            const drawH = ih * scale;
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.drawImage(
+                this.mainCharacterImage,
+                -drawW / 2, -drawH / 2,
+                drawW, drawH
+            );
+            ctx.restore();
+        } else {
+            // Fallback: draw Cartman if image not loaded
+            this.drawCartman(ctx, x, y);
+        }
 
         // --- Draw Abilities Effects ---
         // Cheesy Poofs Shield Bubble
@@ -834,7 +867,7 @@ class SouthParkShooterGame {
         ctx.fillStyle = '#ffe468';
         ctx.fillText('Press [Space] or Click to Start', this.width/2, this.height/2 + 10);
 
-        // Draw Cartman in the center
+        // Draw Cartman in the center (for menu, keep original art for flavor)
         this.drawCartman(ctx, this.width/2, this.height/2 + 70);
 
         // Draw special abilities quick help
@@ -868,7 +901,7 @@ class SouthParkShooterGame {
         ctx.font = '18px Arial';
         ctx.fillText('Press [Space] or Click to Restart', this.width/2, this.height/2 + 56);
 
-        // Draw fallen Cartman
+        // Draw fallen Cartman (for game over, keep original art for flavor)
         ctx.save();
         ctx.translate(this.width/2, this.height/2 + 110);
         ctx.rotate(Math.PI * -0.18);
@@ -927,14 +960,17 @@ class SouthParkShooterGame {
     }
 
     render = () => {
-        // If canvas was resized by CSS, scale context accordingly
+        // Calculate scale and center context transform for responsive fitting
         const cw = this.canvas.clientWidth;
         const ch = this.canvas.clientHeight;
-        if (cw !== this.width || ch !== this.height) {
-            this.ctx.setTransform(cw/this.baseWidth, 0, 0, ch/this.baseHeight, 0, 0);
-        } else {
-            this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-        }
+        const scaleX = cw / this.baseWidth;
+        const scaleY = ch / this.baseHeight;
+        const scale = Math.min(scaleX, scaleY);
+        // Center the game area if aspect ratio doesn't match
+        const offsetX = (cw - this.baseWidth * scale) / 2 / scale;
+        const offsetY = (ch - this.baseHeight * scale) / 2 / scale;
+
+        this.ctx.setTransform(scale, 0, 0, scale, offsetX * scale, offsetY * scale);
 
         // Background: snowy South Park hills
         this.ctx.clearRect(0, 0, this.baseWidth, this.baseHeight);
@@ -1011,7 +1047,7 @@ class SouthParkShooterGame {
         } else if (this.state === 'playing') {
             this.update();
 
-            // Draw player (Cartman)
+            // Draw player (main character image)
             this.drawPlayer(this.ctx, this.player.x, this.player.y);
 
             // Draw bullets (snowballs, fudge)
