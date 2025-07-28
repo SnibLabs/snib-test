@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adventure Time Space Shooter</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="480" height="640"></canvas>
+        <div id="uiLayer">
+            <div id="mainMenu" class="menu active">
+                <h1>Adventure Time<br>Space Shooter</h1>
+                <button id="startBtn">Start Game</button>
+                <p class="desc">Use &larr;/&rarr; or A/D to move<br>Space to shoot</p>
+            </div>
+            <div id="gameOverMenu" class="menu">
+                <h2>Game Over</h2>
+                <div id="finalScore"></div>
+                <button id="restartBtn">Restart</button>
+            </div>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>
